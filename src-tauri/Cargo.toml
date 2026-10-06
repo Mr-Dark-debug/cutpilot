@@ -1,0 +1,49 @@
+[package]
+name = "cutpilot"
+version = "1.0.0"
+description = "AI video editor that writes the edit, you review it"
+authors = ["Mr-Dark-debug"]
+edition = "2021"
+default-run = "cutpilot"
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "cutpilot_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "cutpilot"
+path = "src/main.rs"
+
+[[bin]]
+name = "cutpilot-cli"
+path = "src/bin/cli.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-window-state = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["process", "rt-multi-thread", "macros", "sync", "time", "io-util", "fs"] }
+tokio-util = "0.7"
+anyhow = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+futures-util = "0.3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+regex = "1"
+dirs = "6"
+which = "7"
+trash = "5"
+urlencoding = "2"
