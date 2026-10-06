@@ -35,8 +35,9 @@ pub async fn run(engine: &EngineChoice, req: &Request, cancel: &CancellationToke
     }
 }
 
+/// Errors the other engine can get around: out of usage, not signed in, not installed.
 fn is_limit_error(msg: &str) -> bool {
-    msg.contains("usage limit")
+    msg.contains("usage limit") || msg.contains("not signed in") || msg.contains("is not installed")
 }
 
 /// The other engine, if it's installed and signed in.
@@ -68,7 +69,7 @@ pub async fn run_validated<T>(
     match run_validated_once(engine, req, cancel, on_event, &parse).await {
         Err(e) if is_limit_error(&e.to_string()) && !cancel.is_cancelled() => {
             let Some(other) = fallback_engine(engine).await else { return Err(e) };
-            on_event(&format!("{} is out of usage – switching to {}", engine.label(), other.label()));
+            on_event(&format!("{} can't run right now ({}) – switching to {}", engine.label(), util::clip_text(&e.to_string(), 80), other.label()));
             run_validated_once(&other, backup, cancel, on_event, &parse).await
         }
         r => r,

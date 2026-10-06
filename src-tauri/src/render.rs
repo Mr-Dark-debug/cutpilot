@@ -64,11 +64,17 @@ fn fit(w: u32, h: u32, cover: bool) -> String {
 }
 
 fn font_file() -> Option<PathBuf> {
+    font_from(&["arialbd.ttf", "segoeuib.ttf", "arial.ttf"])
+}
+
+fn font_from(names: &[&str]) -> Option<PathBuf> {
     let windir = std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".into());
-    ["arialbd.ttf", "segoeuib.ttf", "arial.ttf"]
-        .iter()
-        .map(|f| PathBuf::from(&windir).join("Fonts").join(f))
-        .find(|p| p.exists())
+    names.iter().map(|f| PathBuf::from(&windir).join("Fonts").join(f)).find(|p| p.exists())
+}
+
+/// Indic scripts (Devanagari, Bengali, Gujarati, Tamil, Telugu…) need Nirmala UI.
+fn needs_indic_font(text: &str) -> bool {
+    text.chars().any(|c| ('\u{0900}'..='\u{0DFF}').contains(&c))
 }
 
 pub async fn render(
@@ -207,6 +213,14 @@ pub async fn render(
     if let Some(f) = &font {
         let _ = std::fs::copy(f, work.join("font.ttf"));
     }
+    let indic = tl.titles.iter().any(|t| needs_indic_font(&t.text)) || (opts.captions && tl.captions.iter().any(|c| needs_indic_font(&c.text)));
+    if indic {
+        if let Some(f) = font_from(&["Nirmala.ttc", "Nirmala.ttf"]) {
+            let name = if f.extension().map(|e| e == "ttc").unwrap_or(false) { "indic.ttc" } else { "indic.ttf" };
+            let _ = std::fs::copy(&f, work.join(name));
+        }
+    }
+    let indic_font = ["indic.ttc", "indic.ttf"].into_iter().find(|f| work.join(f).exists());
     if opts.titles && font.is_some() {
         for (k, t) in tl.titles.iter().enumerate() {
             std::fs::write(work.join(format!("title_{k}.txt")), &t.text)?;
@@ -218,7 +232,11 @@ pub async fn render(
             };
             let _ = write!(
                 graph,
-                "[{vlabel}]drawtext=fontfile=font.ttf:textfile=title_{k}.txt:fontsize={size}:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw={}:x=(w-text_w)/2:y={y}:enable='between(t,{:.4},{:.4})'[vt{k}];",
+                "[{vlabel}]drawtext=fontfile={}:textfile=title_{k}.txt:expansion=none:fontsize={size}:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw={}:x=(w-text_w)/2:y={y}:enable='between(t,{:.4},{:.4})'[vt{k}];",
+                match indic_font {
+                    Some(f) if needs_indic_font(&t.text) => f,
+                    _ => "font.ttf",
+                },
                 (size as f64 * 0.35) as u32,
                 t.start,
                 t.end
@@ -231,9 +249,10 @@ pub async fn render(
         std::fs::write(work.join("captions.srt"), export::srt(tl))?;
         let size = if vertical { 14 } else { 18 };
         let margin = if vertical { 70 } else { 30 };
+        let cap_font = if indic_font.is_some() && tl.captions.iter().any(|c| needs_indic_font(&c.text)) { "Nirmala UI" } else { "Arial" };
         let _ = write!(
             graph,
-            "[{vlabel}]subtitles=captions.srt:fontsdir=.:force_style='FontName=Arial,FontSize={size},Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV={margin}'[vc];"
+            "[{vlabel}]subtitles=captions.srt:fontsdir=.:force_style='FontName={cap_font},FontSize={size},Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV={margin}'[vc];"
         );
         vlabel = "vc".into();
         video_filtered = true;

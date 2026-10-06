@@ -95,6 +95,12 @@ export const useStore = create<Store>((set, get) => ({
     await get().loadTools();
     const s = get().settings;
     const tools = get().tools;
+    // Default to an engine that can actually run.
+    const ready = (id: string) => tools.some((t) => t.id === id && t.installed && t.loggedIn);
+    const other = s?.engine.provider === "codex" ? "claude" : "codex";
+    if (s && !ready(s.engine.provider) && ready(other)) {
+      await get().saveSettings({ ...s, engine: { ...s.engine, provider: other } });
+    }
     const missing = tools.some((t) => t.required && !t.installed);
     const noEngine = !tools.some((t) => (t.id === "claude" || t.id === "codex") && t.installed && t.loggedIn);
     if (s && (!s.onboarded || missing || noEngine)) set({ route: { name: "setup" } });
@@ -166,6 +172,9 @@ export const useStore = create<Store>((set, get) => ({
       else if (j.kind === "install") {
         get().toast(`${j.title.replace("Installing", "Installed").replace("Downloading", "Downloaded")}`, "ok");
         get().loadTools();
+        // Installs can change settings on the backend (e.g. turning on GPU transcription);
+        // reload so a later save from the UI doesn't write the old values back.
+        get().loadSettings();
       } else if (j.kind === "render") get().toast("Render finished", "ok");
       else if (j.kind === "pipeline") get().toast(`${j.title.replace("Editing ", "")} is ready to review`, "ok");
       if (j.kind === "reference") get().loadStyles();

@@ -1,4 +1,5 @@
 import { ArrowRight, Check, Download, RefreshCw } from "lucide-react";
+import { installUpdate } from "../lib/updater";
 import { useEffect } from "react";
 import { LogoMark } from "../components/Logo";
 import { ToolRow, installTool, useInstallJob } from "../components/ToolRow";
@@ -22,6 +23,7 @@ export function Setup() {
   const engineReady = engines.some((t) => t.installed && t.loggedIn);
   const installing = Object.values(jobs).some((j) => j.kind === "install" && (j.state === "running" || j.state === "queued"));
   const ffJob = useInstallJob("ffmpeg");
+  const update = useStore((s) => s.update);
 
   // Re-check every few seconds while the user signs in or installs in a terminal.
   useEffect(() => {
@@ -47,6 +49,18 @@ export function Setup() {
             Two quick checks and you're editing. Everything runs on this computer; the AI work goes through your own Claude or Codex subscription.
           </p>
         </div>
+
+        {update && update.state !== "error" && (
+          <Card className="glow-card mb-7 flex items-center gap-3 p-4">
+            <Download className="size-5 text-accent" />
+            <div className="min-w-0 flex-1 text-[13px]">
+              <b>CutPilot {update.version} is available.</b> <span className="text-muted">Install it first so setup uses the latest fixes.</span>
+            </div>
+            <Button size="sm" variant="primary" loading={update.state === "downloading"} onClick={installUpdate}>
+              Install & restart
+            </Button>
+          </Card>
+        )}
 
         <Step n={1} done={toolsReady} title="Editing tools" text="FFmpeg reads and renders video. whisper.cpp transcribes speech. About 350 MB in total, downloaded once.">
           <Card className="overflow-hidden">
