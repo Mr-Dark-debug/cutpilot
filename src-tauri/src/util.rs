@@ -4,11 +4,45 @@ use anyhow::{Context, Result};
 use serde::{de::DeserializeOwned, Serialize};
 
 pub const APP_DIR_NAME: &str = "CutPilot";
+pub const APP_ID: &str = "com.mrdarkdebug.cutpilot";
 
-/// `%LOCALAPPDATA%\CutPilot` – tools, models, styles, library index, settings.
+/// `%LOCALAPPDATA%\com.mrdarkdebug.cutpilot` – tools, models, styles, library index,
+/// settings. (The installer puts the program itself in `%LOCALAPPDATA%\CutPilot`.)
 pub fn app_data_dir() -> PathBuf {
     let base = dirs::data_local_dir().unwrap_or_else(std::env::temp_dir);
-    base.join(APP_DIR_NAME)
+    base.join(APP_ID)
+}
+
+/// 1.0.0 kept its data next to the installed program; move it to the data folder once.
+pub fn migrate_legacy_data() {
+    let Some(base) = dirs::data_local_dir() else { return };
+    let old = base.join(APP_DIR_NAME);
+    let new = app_data_dir();
+    let items = ["settings.json", "library.json", "tools", "models", "styles", "cache", "thumbs"];
+    if !items.iter().any(|i| old.join(i).exists()) {
+        return;
+    }
+    let _ = std::fs::create_dir_all(&new);
+    for i in items {
+        let (from, to) = (old.join(i), new.join(i));
+        if from.exists() && !to.exists() {
+            let _ = std::fs::rename(&from, &to);
+        }
+    }
+    // Stored absolute paths (library thumbnails, reference thumbnails) point at the old folder.
+    let (o, n) = (old.to_string_lossy().to_string(), new.to_string_lossy().to_string());
+    let (oj, nj) = (o.replace('\\', "\\\\"), n.replace('\\', "\\\\"));
+    let mut files = vec![new.join("library.json")];
+    if let Ok(rd) = std::fs::read_dir(new.join("styles")) {
+        files.extend(rd.flatten().map(|e| e.path()).filter(|p| p.extension().map(|x| x == "json").unwrap_or(false)));
+    }
+    for f in files {
+        if let Ok(text) = std::fs::read_to_string(&f) {
+            if text.contains(&oj) {
+                let _ = std::fs::write(&f, text.replace(&oj, &nj));
+            }
+        }
+    }
 }
 
 pub fn tools_dir() -> PathBuf {

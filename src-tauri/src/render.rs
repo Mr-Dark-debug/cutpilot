@@ -147,6 +147,17 @@ pub async fn render(
     }
     std::fs::write(&list, list_txt)?;
 
+    // Measure loudness first so pass B can normalise precisely (two-pass loudnorm).
+    progress(0.6, "Measuring loudness");
+    let measured = measure_loudness(&ffmpeg, &work, cancel).await.unwrap_or(None);
+    let loudnorm = match &measured {
+        Some(m) => format!(
+            "loudnorm=I=-14:TP=-1.5:LRA=11:measured_I={}:measured_TP={}:measured_LRA={}:measured_thresh={}:offset={}:linear=true",
+            m.i, m.tp, m.lra, m.thresh, m.offset
+        ),
+        None => "loudnorm=I=-14:TP=-1.5:LRA=11".to_string(),
+    };
+
     // ---------------- pass B: overlays, captions, audio
     let mut args: Vec<String> = ["-hide_banner", "-loglevel", "error", "-y", "-progress", "pipe:1", "-nostats", "-f", "concat", "-safe", "0", "-i", "parts.txt"]
         .map(String::from)
@@ -237,10 +248,10 @@ pub async fn render(
             graph,
             "[0:a]asplit=2[voice][key];[{input_n}:a]aresample=48000,aformat=channel_layouts=stereo,volume=0.35,afade=t=out:st={fade_st:.3}:d=3[mus];\
              [mus][key]sidechaincompress=threshold=0.03:ratio=10:attack=15:release=450[duck];\
-             [voice][duck]amix=inputs=2:duration=first:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[aout];"
+             [voice][duck]amix=inputs=2:duration=first:normalize=0,{loudnorm},aresample=48000[aout];"
         );
     } else {
-        let _ = write!(graph, "[0:a]loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[aout];");
+        let _ = write!(graph, "[0:a]{loudnorm},aresample=48000[aout];");
     }
     let graph = graph.trim_end_matches(';').to_string();
     args.extend(["-filter_complex".into(), graph]);
@@ -267,4 +278,40 @@ pub async fn render(
     std::fs::rename(&tmp_out, out)?;
     let _ = std::fs::remove_dir_all(&work);
     Ok(())
+}
+
+struct Loudness {
+    i: String,
+    tp: String,
+    lra: String,
+    thresh: String,
+    offset: String,
+}
+
+/// First loudnorm pass over the assembled audio (cwd = render work dir).
+async fn measure_loudness(ffmpeg: &Path, work: &Path, cancel: &CancellationToken) -> Result<Option<Loudness>> {
+    let out = crate::proc::run(
+        ffmpeg,
+        &["-hide_banner", "-nostats", "-f", "concat", "-safe", "0", "-i", "parts.txt", "-vn", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json", "-f", "null", "-"],
+        crate::proc::RunOpts { cwd: Some(work.to_path_buf()), cancel: Some(cancel.clone()), keep_bytes: 256 * 1024, ..Default::default() },
+    )
+    .await?;
+    let text = &out.stderr;
+    let (Some(a), Some(b)) = (text.rfind('{'), text.rfind('}')) else { return Ok(None) };
+    if b <= a {
+        return Ok(None);
+    }
+    let v: serde_json::Value = match serde_json::from_str(&text[a..=b]) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+    let g = |k: &str| v[k].as_str().map(String::from);
+    let (Some(i), Some(tp), Some(lra), Some(thresh), Some(offset)) = (g("input_i"), g("input_tp"), g("input_lra"), g("input_thresh"), g("target_offset")) else {
+        return Ok(None);
+    };
+    // Silence measures as -inf, which loudnorm can't take back.
+    if [&i, &tp, &lra, &thresh, &offset].iter().any(|x| x.contains("inf") || x.contains("nan")) {
+        return Ok(None);
+    }
+    Ok(Some(Loudness { i, tp, lra, thresh, offset }))
 }

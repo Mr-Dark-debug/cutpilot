@@ -826,3 +826,31 @@ mod tests {
         assert_eq!(back.broll[0].at, "U1");
     }
 }
+
+#[cfg(test)]
+mod schema_tests {
+    /// OpenAI strict structured outputs (used by `codex exec --output-schema`): every
+    /// object must list all its properties as required and forbid extras.
+    fn check_strict(v: &serde_json::Value, path: &str) {
+        if let Some(props) = v.get("properties").and_then(|p| p.as_object()) {
+            assert_eq!(v["additionalProperties"], serde_json::json!(false), "{path}: additionalProperties must be false");
+            let req: Vec<&str> = v["required"].as_array().unwrap().iter().map(|x| x.as_str().unwrap()).collect();
+            for k in props.keys() {
+                assert!(req.contains(&k.as_str()), "{path}.{k} must be required");
+            }
+            for (k, p) in props {
+                check_strict(p, &format!("{path}.{k}"));
+            }
+        }
+        if let Some(items) = v.get("items") {
+            check_strict(items, &format!("{path}[]"));
+        }
+    }
+
+    #[test]
+    fn schemas_are_strict_mode_compatible() {
+        check_strict(&super::plan_schema(), "plan");
+        check_strict(&crate::style::style_summary_schema(), "style");
+        check_strict(&crate::prompts::library_schema(), "library");
+    }
+}

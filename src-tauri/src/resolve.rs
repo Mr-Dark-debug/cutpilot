@@ -13,7 +13,7 @@ const SCRIPT_NAME: &str = "CutPilot Import.lua";
 
 const SCRIPT: &str = r#"-- CutPilot Import
 -- Imports the timeline CutPilot last sent to Resolve (media, timeline, captions).
-local handoffPath = os.getenv("LOCALAPPDATA") .. "\\CutPilot\\resolve_handoff.lua"
+local handoffPath = os.getenv("LOCALAPPDATA") .. "\\com.mrdarkdebug.cutpilot\\resolve_handoff.lua"
 local ok, h = pcall(dofile, handoffPath)
 if not ok or type(h) ~= "table" then
   print("CutPilot: nothing to import yet. Click 'Send to Resolve' in CutPilot first.")

@@ -228,6 +228,7 @@ pub fn build_utterances(
         min_idx = idx;
         assign[wi] = idx;
     }
+    realign_anomalies(&words, &regions, &mut assign);
 
     // 2. Retimes words inside their region, keeping order.
     let mut by_region: Vec<Vec<usize>> = vec![vec![]; regions.len()];
@@ -328,9 +329,194 @@ pub fn build_utterances(
     (utts, words)
 }
 
+/// Spoken length proxy: letters/digits plus one per word gap.
+fn word_chars(w: &Word) -> f64 {
+    w.text.chars().filter(|c| c.is_alphanumeric()).count() as f64 + 1.0
+}
+
+/// Whisper's timing often breaks down on repeated phrases (retakes): words pile up
+/// on one timestamp, or a phrase lands in the wrong breath group. Regions whose
+/// speaking rate is implausible (or that hold collapsed timestamps) are re-aligned
+/// together with their neighbours by a small dynamic program that trades off
+/// "the words fit the region's duration" against "words stay near Whisper's time".
+fn realign_anomalies(words: &[Word], regions: &[Span], assign: &mut [usize]) {
+    let m = regions.len();
+    if words.len() < 4 || m < 2 {
+        return;
+    }
+    let mut chars = vec![0.0; m];
+    for (wi, &r) in assign.iter().enumerate() {
+        chars[r] += word_chars(&words[wi]);
+    }
+    let mut rates: Vec<f64> = (0..m)
+        .filter(|&j| regions[j].len() >= 0.8 && chars[j] > 0.0)
+        .map(|j| chars[j] / regions[j].len())
+        .collect();
+    if rates.len() < 2 {
+        return;
+    }
+    rates.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let rho = rates[rates.len() / 2].max(1.0);
+
+    let mut bad = vec![false; m];
+    for j in 0..m {
+        let d = regions[j].len();
+        let r = chars[j] / d.max(0.01);
+        if d >= 1.2 && chars[j] > 0.0 && (r > 2.5 * rho || r < 0.3 * rho) {
+            bad[j] = true;
+        }
+    }
+    for wi in 2..words.len() {
+        if (words[wi].start - words[wi - 1].start).abs() < 0.011 && (words[wi - 1].start - words[wi - 2].start).abs() < 0.011 {
+            bad[assign[wi]] = true;
+        }
+    }
+
+    let mut j = 0;
+    while j < m {
+        if !bad[j] {
+            j += 1;
+            continue;
+        }
+        let mut end = j;
+        while end + 1 < m && (bad[end + 1] || (end + 2 < m && bad[end + 2])) {
+            end += 1;
+        }
+        let (ja, jb) = (j.saturating_sub(1), (end + 1).min(m - 1));
+        realign_window(words, regions, assign, ja, jb, rho);
+        j = end + 2;
+    }
+}
+
+fn realign_window(words: &[Word], regions: &[Span], assign: &mut [usize], ja: usize, jb: usize, rho: f64) {
+    const RATE_W: f64 = 2.0;
+    let Some(wa) = assign.iter().position(|&r| r >= ja && r <= jb) else { return };
+    let wb = assign.iter().rposition(|&r| r >= ja && r <= jb).unwrap() + 1;
+    let n = wb - wa;
+    if n == 0 || n > 400 {
+        return;
+    }
+    let time_cost = |k: usize, j: usize| {
+        let t = words[k].start;
+        let r = regions[j];
+        let d = if t < r.start { r.start - t } else if t > r.end { t - r.end } else { 0.0 };
+        // Weak: this window was flagged because Whisper's timing broke down here.
+        d.min(1.5) * 0.15
+    };
+    // Prefix sums (indices relative to wa) so a block's cost is O(1).
+    let mut chars_pre = vec![0.0; n + 1];
+    for k in 0..n {
+        chars_pre[k + 1] = chars_pre[k] + word_chars(&words[wa + k]);
+    }
+    let time_pre: Vec<Vec<f64>> = (ja..=jb)
+        .map(|j| {
+            let mut v = vec![0.0; n + 1];
+            for k in 0..n {
+                v[k + 1] = v[k] + time_cost(wa + k, j);
+            }
+            v
+        })
+        .collect();
+    // a, b are absolute word indices (a == b means an empty region).
+    let block_cost = |j: usize, a: usize, b: usize| {
+        if a == b {
+            return RATE_W * regions[j].len();
+        }
+        let (ra, rb) = (a - wa, b - wa);
+        let c = chars_pre[rb] - chars_pre[ra];
+        let rate = RATE_W * (c / rho - regions[j].len()).abs();
+        // Pauses usually follow punctuation.
+        let last = words[b - 1].text.trim_end_matches(['"', '\'', ')', '”', '’']);
+        let punct = if last.ends_with(['.', ',', '?', '!', ';', ':', '…', '।']) { 0.0 } else { 1.0 };
+        rate + punct + time_pre[j - ja][rb] - time_pre[j - ja][ra]
+    };
+    // Current cost, to only accept improvements.
+    let mut current = 0.0;
+    for j in ja..=jb {
+        let ks: Vec<usize> = (wa..wb).filter(|&k| assign[k] == j).collect();
+        current += match (ks.first(), ks.last()) {
+            (Some(&a), Some(&b)) => block_cost(j, a, b + 1),
+            _ => block_cost(j, 0, 0),
+        };
+    }
+    // dp[j][b]: best cost with words wa..wa+b assigned to regions ja..ja+j.
+    let rows = jb - ja + 1;
+    let mut dp = vec![vec![f64::INFINITY; n + 1]; rows + 1];
+    let mut from = vec![vec![0usize; n + 1]; rows + 1];
+    dp[0][0] = 0.0;
+    for jj in 1..=rows {
+        let j = ja + jj - 1;
+        for b in 0..=n {
+            for a in 0..=b {
+                let prev = dp[jj - 1][a];
+                if !prev.is_finite() {
+                    continue;
+                }
+                let c = prev + if a == b { block_cost(j, 0, 0) } else { block_cost(j, wa + a, wa + b) };
+                if c < dp[jj][b] {
+                    dp[jj][b] = c;
+                    from[jj][b] = a;
+                }
+            }
+        }
+    }
+    if dp[rows][n] + 0.5 >= current {
+        return;
+    }
+    let mut b = n;
+    for jj in (1..=rows).rev() {
+        let a = from[jj][b];
+        for k in a..b {
+            assign[wa + k] = ja + jj - 1;
+        }
+        b = a;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repeated_phrase_with_collapsed_timestamps_is_realigned() {
+        // Real failure: a retake where whisper put take 1's tail into take 2 and
+        // stamped all of take 2 at one time.
+        let audio = AudioAnalysis {
+            duration: 26.0,
+            speech: vec![
+                Span { start: 1.3, end: 2.98 },
+                Span { start: 5.14, end: 5.54 },
+                Span { start: 8.46, end: 10.66 },
+                Span { start: 12.49, end: 15.25 },
+                Span { start: 17.63, end: 18.3 },
+                Span { start: 19.2, end: 20.89 },
+                Span { start: 22.57, end: 24.86 },
+            ],
+            ..Default::default()
+        };
+        let mut words = vec![];
+        let mut push = |s: &str, t: f64| words.push(Word { text: s.into(), start: t, end: t, p: 0.9 });
+        for (w, t) in [("Okay,", 1.6), ("is", 2.28), ("it", 2.54), ("recording?", 2.9), ("Okay.", 5.44)] {
+            push(w, t);
+        }
+        for (w, t) in [("Three", 8.62), ("things", 8.96), ("to", 9.64), ("do", 9.82), ("before", 13.64), ("your", 13.86), ("dental", 14.16), ("cleaning.", 14.56)] {
+            push(w, t);
+        }
+        for w in ["Three", "things", "to", "do", "before", "your", "dental", "cleaning", "appointment."] {
+            push(w, 15.32);
+        }
+        for (w, t) in [("Number", 17.7), ("1.", 18.0), ("Make", 19.3), ("a", 19.5), ("list", 19.7), ("of", 19.9), ("your", 20.1), ("medications.", 20.4)] {
+            push(w, t);
+        }
+        for (w, t) in [("Your", 22.6), ("dentist", 22.9), ("needs", 23.3), ("to", 23.5), ("know", 23.7), ("about", 23.9), ("blood", 24.2), ("thinners.", 24.5)] {
+            push(w, t);
+        }
+        let t = Transcript { language: "en".into(), model: "base".into(), words };
+        let (utts, _) = build_utterances("A1", &t, &audio, 1);
+        let texts: Vec<&str> = utts.iter().map(|u| u.text.as_str()).collect();
+        assert!(texts.contains(&"Three things to do before your dental cleaning."), "{texts:?}");
+        assert!(texts.contains(&"Three things to do before your dental cleaning appointment."), "{texts:?}");
+    }
 
     fn w(text: &str, t: f64) -> Word {
         Word { text: text.into(), start: t, end: t, p: 0.9 }

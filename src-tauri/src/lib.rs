@@ -59,6 +59,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            util::migrate_legacy_data();
             let reporter = Arc::new(TauriReporter { app: app.handle().clone() });
             app.manage(AppState { jobs: Jobs::new(reporter) });
             // Projects interrupted by a crash or forced quit shouldn't stay "running".
@@ -118,6 +119,12 @@ pub fn run() {
             commands::describe_library,
             commands::path_exists,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running CutPilot");
+        .build(tauri::generate_context!())
+        .expect("error while running CutPilot")
+        .run(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                // Don't leave ffmpeg / whisper / AI CLIs running after the window closes.
+                proc::kill_all_sync();
+            }
+        });
 }

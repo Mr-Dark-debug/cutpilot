@@ -12,6 +12,29 @@ use tokio_util::sync::CancellationToken;
 
 pub type LineFn = Box<dyn FnMut(&str) + Send>;
 
+/// PIDs of running children, so they can be killed when the app quits.
+fn live() -> &'static std::sync::Mutex<std::collections::HashSet<u32>> {
+    static LIVE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<u32>>> = std::sync::OnceLock::new();
+    LIVE.get_or_init(Default::default)
+}
+
+/// Kills every child process tree still running (called on app exit).
+pub fn kill_all_sync() {
+    let pids: Vec<u32> = live().lock().unwrap().drain().collect();
+    for pid in pids {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            let _ = std::process::Command::new("taskkill")
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .creation_flags(0x0800_0000)
+                .status();
+        }
+        #[cfg(not(windows))]
+        let _ = pid;
+    }
+}
+
 #[derive(Default)]
 pub struct RunOpts {
     pub cwd: Option<PathBuf>,
@@ -101,6 +124,18 @@ pub async fn run<S: AsRef<str>>(program: &Path, args: &[S], mut opts: RunOpts) -
         .spawn()
         .map_err(|e| anyhow!("could not start {}: {e}", program.display()))?;
     let pid = child.id();
+    if let Some(p) = pid {
+        live().lock().unwrap().insert(p);
+    }
+    struct Unregister(Option<u32>);
+    impl Drop for Unregister {
+        fn drop(&mut self) {
+            if let Some(p) = self.0 {
+                live().lock().unwrap().remove(&p);
+            }
+        }
+    }
+    let _unregister = Unregister(pid);
 
     if let Some(input) = opts.stdin.take() {
         if let Some(mut stdin) = child.stdin.take() {

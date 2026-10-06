@@ -84,6 +84,13 @@ export const useStore = create<Store>((set, get) => ({
   init: async () => {
     const [info] = await Promise.all([api.appInfo(), get().loadSettings(), get().loadProjects(), get().loadStyles(), get().loadJobs()]);
     set({ info });
+    try {
+      const last = localStorage.getItem("cutpilot-last-version");
+      if (last && last !== info.version) get().toast(`Updated to CutPilot ${info.version}`, "ok");
+      localStorage.setItem("cutpilot-last-version", info.version);
+    } catch {
+      /* storage unavailable */
+    }
     api.engineModels().then((models) => set({ models }));
     await get().loadTools();
     const s = get().settings;

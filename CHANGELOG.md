@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1
+
+- Retakes are transcribed correctly: when Whisper's word timing collapses on a repeated sentence, CutPilot re-aligns the words to the actual breath groups, so each take gets the right text (better AI decisions and captions).
+- Renders hit the YouTube loudness target more precisely (two-pass loudness normalisation).
+- Closing CutPilot now stops any FFmpeg, whisper or AI CLI processes it started.
+- App data moved to its own folder (`%LOCALAPPDATA%\com.mrdarkdebug.cutpilot`), separate from the installed program. Existing settings, tools, models, styles and library are moved automatically.
+- Shows a notice after an update is installed.
+
 ## 1.0.0
 
 First release.

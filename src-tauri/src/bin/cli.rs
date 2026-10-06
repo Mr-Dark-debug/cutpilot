@@ -53,6 +53,7 @@ async fn wait(jobs: &Arc<Jobs>, id: &str) -> Result<JobInfo> {
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().cloned().unwrap_or_default();
+    cutpilot_lib::util::migrate_legacy_data();
     tauri::async_runtime::block_on(async move {
         let jobs = Jobs::new(Arc::new(Console));
         match cmd.as_str() {
@@ -118,6 +119,10 @@ fn main() -> Result<()> {
                 });
                 wait(&jobs, &job).await?;
                 println!("done: {}", project::get(&p.id)?.dir);
+            }
+            "term" => {
+                // Opens a visible PowerShell window the same way the app's Sign in buttons do.
+                cutpilot_lib::proc::open_terminal("CutPilot terminal test", &args[1..].join(" "))?;
             }
             "dump" => {
                 // Real data for the UI's browser-preview mock.
