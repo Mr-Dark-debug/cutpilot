@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.2
+
+- If the chosen AI engine is signed out, missing or out of usage, the edit continues with the other signed-in engine, and new projects default to an engine that is ready.
+- Titles with a % sign render correctly, and Hindi and other Indic-script titles and captions use a font that supports them (Nirmala UI).
+- Installing the GPU build of whisper.cpp keeps GPU transcription switched on (it could be switched back off by a later settings change).
+- The first-run setup screen also offers available updates.
+
 ## 1.0.1
 
 - Retakes are transcribed correctly: when Whisper's word timing collapses on a repeated sentence, CutPilot re-aligns the words to the actual breath groups, so each take gets the right text (better AI decisions and captions).

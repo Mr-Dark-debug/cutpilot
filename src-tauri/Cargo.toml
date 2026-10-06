@@ -1,6 +1,6 @@
 [package]
 name = "cutpilot"
-version = "1.0.1"
+version = "1.0.2"
 description = "AI video editor that writes the edit, you review it"
 authors = ["Mr-Dark-debug"]
 edition = "2021"
