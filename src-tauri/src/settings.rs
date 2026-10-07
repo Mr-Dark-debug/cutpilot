@@ -58,6 +58,10 @@ pub struct Settings {
     pub burn_captions: bool,
     /// Switch to the other signed-in engine when one runs out of usage.
     pub engine_fallback: bool,
+    /// Resolve.exe chosen by the user (empty = detect automatically).
+    pub resolve_path: String,
+    /// Starred models in the model picker, as "provider:model".
+    pub favorite_models: Vec<String>,
     pub onboarded: bool,
 }
 
@@ -81,6 +85,8 @@ impl Default for Settings {
             auto_check_updates: true,
             burn_captions: false,
             engine_fallback: true,
+            resolve_path: String::new(),
+            favorite_models: vec![],
             onboarded: false,
         }
     }

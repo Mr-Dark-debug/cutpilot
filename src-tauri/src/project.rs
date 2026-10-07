@@ -107,6 +107,10 @@ pub struct ChatMessage {
     pub text: String,
     pub created: String,
     pub version: Option<u32>,
+    /// What the AI did while answering (thinking, actions), shown collapsed in the chat.
+    pub steps: Vec<String>,
+    pub seconds: f64,
+    pub engine: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

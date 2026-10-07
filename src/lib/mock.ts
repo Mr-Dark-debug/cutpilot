@@ -20,6 +20,8 @@ const settings: Settings = {
   autoCheckUpdates: true,
   burnCaptions: false,
   engineFallback: true,
+  resolvePath: "",
+  favoriteModels: ["claude:sonnet"],
   onboarded: true,
 };
 

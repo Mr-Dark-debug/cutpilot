@@ -26,6 +26,8 @@ export interface Settings {
   autoCheckUpdates: boolean;
   burnCaptions: boolean;
   engineFallback: boolean;
+  resolvePath: string;
+  favoriteModels: string[];
   onboarded: boolean;
 }
 
@@ -153,6 +155,9 @@ export interface ChatMessage {
   text: string;
   created: string;
   version: number | null;
+  steps?: string[];
+  seconds?: number;
+  engine?: string;
 }
 
 export interface Project {
@@ -363,6 +368,8 @@ export interface Style {
   targetLength: number;
   aspect: string;
   color: string;
+  icon: string;
+  category: string;
   references: RefAnalysis[];
   updated: string;
 }

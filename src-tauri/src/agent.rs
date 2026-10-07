@@ -69,7 +69,7 @@ pub async fn run_validated<T>(
     match run_validated_once(engine, req, cancel, on_event, &parse).await {
         Err(e) if is_limit_error(&e.to_string()) && !cancel.is_cancelled() => {
             let Some(other) = fallback_engine(engine).await else { return Err(e) };
-            on_event(&format!("{} can't run right now ({}) – switching to {}", engine.label(), util::clip_text(&e.to_string(), 80), other.label()));
+            on_event(&format!("info: {} can't run right now ({}) – switching to {}", engine.label(), util::clip_text(&e.to_string(), 80), other.label()));
             run_validated_once(&other, backup, cancel, on_event, &parse).await
         }
         r => r,
@@ -97,7 +97,7 @@ pub async fn run_validated_once<T>(
     if msg.contains("not installed") || msg.contains("not signed in") || msg.contains("usage limit") {
         return Err(err);
     }
-    on_event(&format!("Retrying once: {}", util::clip_text(&msg, 160)));
+    on_event(&format!("info: Retrying once: {}", util::clip_text(&msg, 160)));
     let retry = Request {
         prompt: format!(
             "{}\n\nIMPORTANT: your previous answer was rejected: {}\nReturn a corrected answer that matches the schema exactly.",
@@ -199,11 +199,12 @@ async fn run_claude(engine: &EngineChoice, req: &Request, cancel: &CancellationT
                                 Some("text") => {
                                     let t = c["text"].as_str().unwrap_or("").trim().to_string();
                                     if !t.is_empty() {
-                                        let _ = tx.send(util::clip_text(&t, 300));
+                                        let _ = tx.send(format!("say: {}", util::clip_text(&t, 400)));
                                     }
                                 }
                                 Some("thinking") => {
-                                    let _ = tx.send("Thinking…".into());
+                                    let t = c["thinking"].as_str().unwrap_or("").trim().to_string();
+                                    let _ = tx.send(if t.is_empty() { "think: Thinking…".into() } else { format!("think: {}", util::clip_text(&t, 600)) });
                                 }
                                 Some("tool_use") => {
                                     let name = c["name"].as_str().unwrap_or("tool");
@@ -211,9 +212,9 @@ async fn run_claude(engine: &EngineChoice, req: &Request, cancel: &CancellationT
                                         Path::new(p).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default()
                                     });
                                     let _ = tx.send(match (name, detail) {
-                                        ("Read", Some(f)) => format!("Looking at {f}"),
-                                        ("StructuredOutput", _) => "Writing the edit decisions…".into(),
-                                        (n, _) => format!("Using {n}"),
+                                        ("Read", Some(f)) => format!("tool: Looking at {f}"),
+                                        ("StructuredOutput", _) => "tool: Writing the edit decisions".into(),
+                                        (n, _) => format!("tool: Using {n}"),
                                     });
                                 }
                                 _ => {}
@@ -249,7 +250,7 @@ async fn run_claude(engine: &EngineChoice, req: &Request, cancel: &CancellationT
         bail!("{}", friendly_error("Claude", &msg));
     }
     if let Some(cost) = res["total_cost_usd"].as_f64() {
-        on_event(&format!("Claude finished ({} turns, ≈${cost:.3} API-equivalent)", res["num_turns"].as_i64().unwrap_or(1)));
+        on_event(&format!("info: Claude finished ({} turns, ≈${cost:.3} API-equivalent)", res["num_turns"].as_i64().unwrap_or(1)));
     }
     if let Some(v) = res.get("structured_output").filter(|v| v.is_object()) {
         return Ok(v.clone());
@@ -320,14 +321,14 @@ async fn run_codex(engine: &EngineChoice, req: &Request, cancel: &CancellationTo
                             Some("reasoning") => {
                                 let t = item["text"].as_str().unwrap_or("").trim().replace("**", "");
                                 if !t.is_empty() && v["type"] == "item.completed" {
-                                    let _ = tx.send(util::clip_text(t.lines().next().unwrap_or(""), 200));
+                                    let _ = tx.send(format!("think: {}", util::clip_text(&t, 600)));
                                 }
                             }
                             Some("agent_message") if v["type"] == "item.completed" => {
-                                let _ = tx.send("Writing the edit decisions…".into());
+                                let _ = tx.send("tool: Writing the edit decisions".into());
                             }
                             Some("command_execution") if v["type"] == "item.started" => {
-                                let _ = tx.send(format!("Running {}", util::clip_text(item["command"].as_str().unwrap_or(""), 80)));
+                                let _ = tx.send(format!("tool: Running {}", util::clip_text(item["command"].as_str().unwrap_or(""), 80)));
                             }
                             Some("error") => {
                                 let m = item["message"].as_str().unwrap_or("");
@@ -340,7 +341,7 @@ async fn run_codex(engine: &EngineChoice, req: &Request, cancel: &CancellationTo
                         }
                     }
                     Some("turn.started") => {
-                        let _ = tx.send("Codex is reading the footage notes…".into());
+                        let _ = tx.send("tool: Reading the transcript and frames".into());
                     }
                     Some("error") | Some("turn.failed") => {
                         let m = v["message"].as_str().or(v["error"]["message"].as_str()).unwrap_or("").to_string();
@@ -349,7 +350,7 @@ async fn run_codex(engine: &EngineChoice, req: &Request, cancel: &CancellationTo
                     Some("turn.completed") => {
                         let u = &v["usage"];
                         let _ = tx.send(format!(
-                            "Codex finished ({} in / {} out tokens)",
+                            "info: Codex finished ({} in / {} out tokens)",
                             u["input_tokens"].as_i64().unwrap_or(0),
                             u["output_tokens"].as_i64().unwrap_or(0)
                         ));

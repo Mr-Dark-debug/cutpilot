@@ -126,10 +126,22 @@ button:disabled {
   cursor: not-allowed;
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
+/* No coloured focus rings: inputs show focus with their border, buttons with a
+   subtle neutral outline only when navigating by keyboard. */
+:focus {
+  outline: none;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[contenteditable]:focus-visible {
+  outline: none;
+}
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--text) 25%, transparent);
   outline-offset: 2px;
-  border-radius: 8px;
 }
 
 .dotted {

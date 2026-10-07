@@ -178,9 +178,58 @@ pub fn codex_invocation() -> Option<(PathBuf, Vec<String>)> {
     None
 }
 
+/// Finds Resolve.exe: the user's choice, the default folder, then the Start-menu
+/// shortcut (Resolve can be installed anywhere, e.g. D:\davinci).
 pub fn resolve_exe() -> Option<PathBuf> {
-    let p = PathBuf::from(r"C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe");
-    p.exists().then_some(p)
+    let custom = settings::get().resolve_path;
+    if !custom.trim().is_empty() && Path::new(custom.trim()).exists() {
+        return Some(PathBuf::from(custom.trim()));
+    }
+    let default = PathBuf::from(r"C:\Program Files\Blackmagic Design\DaVinci Resolve\Resolve.exe");
+    if default.exists() {
+        return Some(default);
+    }
+    static FOUND: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+    FOUND.get_or_init(find_resolve_via_shortcut).clone().filter(|p| p.exists())
+}
+
+#[cfg(windows)]
+fn find_resolve_via_shortcut() -> Option<PathBuf> {
+    use std::os::windows::process::CommandExt;
+    let script = r#"$dirs = @("$env:ProgramData\Microsoft\Windows\Start Menu\Programs", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs", "$env:PUBLIC\Desktop", "$env:USERPROFILE\Desktop");
+$sh = New-Object -ComObject WScript.Shell;
+Get-ChildItem $dirs -Recurse -Filter "DaVinci Resolve*.lnk" -ErrorAction SilentlyContinue | ForEach-Object { $sh.CreateShortcut($_.FullName).TargetPath } | Where-Object { $_ -like "*Resolve.exe" } | Select-Object -First 1"#;
+    let out = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .creation_flags(0x0800_0000)
+        .output()
+        .ok()?;
+    let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!p.is_empty()).then(|| PathBuf::from(p))
+}
+
+#[cfg(not(windows))]
+fn find_resolve_via_shortcut() -> Option<PathBuf> {
+    None
+}
+
+/// "21.0.40005" from the registry, if installed.
+pub fn resolve_version() -> String {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        if let Ok(out) = std::process::Command::new("reg")
+            .args(["query", r"HKLM\SOFTWARE\Blackmagic Design\DaVinci Resolve", "/v", "Version"])
+            .creation_flags(0x0800_0000)
+            .output()
+        {
+            let text = String::from_utf8_lossy(&out.stdout);
+            if let Some(v) = text.split_whitespace().last().filter(|v| v.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)) {
+                return v.to_string();
+            }
+        }
+    }
+    String::new()
 }
 
 // ---------------------------------------------------------------- status
@@ -337,12 +386,14 @@ pub async fn all_status() -> Vec<ToolStatus> {
     list.push(yt);
 
     let mut rv = ToolStatus { id: "resolve".into(), name: "DaVinci Resolve".into(), ..Default::default() };
-    if let Some(p) = resolve_exe() {
+    let found = tokio::task::spawn_blocking(|| (resolve_exe(), resolve_version())).await.unwrap_or((None, String::new()));
+    if let (Some(p), version) = found {
         rv.installed = true;
         rv.path = p.to_string_lossy().to_string();
-        rv.detail = "Found".into();
+        rv.version = version;
+        rv.detail = "Ready · Send to Resolve imports timelines".into();
     } else {
-        rv.detail = "Optional · FCPXML export still works".into();
+        rv.detail = "Not found · set the path in Settings, FCPXML export still works".into();
     }
     list.push(rv);
     list

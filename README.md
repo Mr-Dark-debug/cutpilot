@@ -23,18 +23,22 @@ Because nothing runs inside an NLE, **you can edit many videos in parallel** and
 
 - **Uses your own Claude Code or Codex sign-in.** No API keys and no extra AI bill. CutPilot runs the official CLIs headlessly and never touches your credentials. If one engine runs out of usage, it can switch to the other.
 - **Clean cuts.** Cut points come from the audio waveform, not the transcript, so words are never clipped. The AI picks whole utterances by id, so it can't invent timestamps.
-- **Instant review.** The player plays the edit live, skipping removed parts and overlaying B-roll, titles and captions, with no render needed. Untick clips, nudge edges by 0.1 s, or restore anything the AI cut.
-- **Chat revisions.** "Start with the question", "tighter", "make a 60-second Short". Each request makes a new version you can roll back to.
+- **Instant review.** The player plays the edit live, skipping removed parts and overlaying B-roll, titles and captions, with no render needed.
+- **A real timeline.** Titles, B-roll, video and audio-waveform tracks with timecode, zoom (Ctrl+wheel), snapping, ripple trims by dragging clip edges, drag-to-reorder, split at playhead (S), delete, and undo/redo. Restore anything the AI cut from the Cut list.
+- **Chat with the AI editor.** "Start with the question", "tighter", "make a 60-second Short". Pick the model and reasoning effort in the chat, watch what the AI is doing (thinking, looking at frames, writing decisions), and switch between versions from the ⋯ menu.
 - **B-roll** from your own library (AI-described) or Pexels/Pixabay with your free API key. Empty slots become Resolve markers.
-- **Styles and references.** House rules per style (talking head, doctor/dentist explainer, Shorts, vlog, tutorial, podcast). Add reference videos or YouTube links, and CutPilot measures their pacing and the AI writes matching rules.
+- **Styles and references.** 15 detailed styles: YouTube talking head, vlog, travel, tutorial, educational explainer, podcast/interview, Shorts/Reels/TikTok, product review, gaming, cooking, fitness, course/webinar, documentary, reaction and promo. Edit their house rules or make your own. Add reference videos or YouTube links, and CutPilot measures their pacing and the AI writes matching rules.
+- **Fast to drive.** Ctrl+K Spotlight search for projects, styles, clips, settings and actions; collapsible sidebar (Ctrl+B) with projects listed like chats; resizable editor, timeline and chat panels.
 - **Batch.** Drop 15 videos and get 15 edits. Transcription and AI work have separate concurrency limits.
-- **DaVinci Resolve hand-off.** One click exports and opens Resolve; *Workspace ▸ Scripts ▸ CutPilot Import* brings in media, timeline (cuts, B-roll on V2, titles, markers, chapters) and captions. Works with the free version.
+- **DaVinci Resolve hand-off.** Resolve is found wherever it's installed (Start-menu shortcut, registry, or a path you choose). One click exports and opens Resolve; *Workspace ▸ Scripts ▸ CutPilot Import* brings in media, timeline (cuts, B-roll on V2, titles, markers, chapters) and captions. Works with the free version.
 - **Render MP4** in 16:9 or 9:16 with B-roll, titles, burned-in captions, a ducked music bed and −14 LUFS loudness, using NVENC when available.
 - **Auto-updates** from GitHub Releases (signed).
 
-| Studio | Working |
+| Studio | Model picker |
 |---|---|
-| ![Studio](docs/screenshots/studio.png) | ![Progress](docs/screenshots/progress.png) |
+| ![Studio](docs/screenshots/studio.png) | ![Model picker](docs/screenshots/model-picker.png) |
+| **Dark theme** | **Working** |
+| ![Dark](docs/screenshots/dark.png) | ![Progress](docs/screenshots/progress.png) |
 
 ## Install
 
@@ -46,8 +50,8 @@ Because nothing runs inside an NLE, **you can edit many videos in parallel** and
 
 ## Using it
 
-1. **Studio:** drop videos, pick a style, and say how you want it edited ("8-minute cut, hook with the bleeding-gums question, B-roll on each tip").
-2. **Review:** play the edit, check the *Cut* list, fix anything, or ask for changes in the chat.
+1. **Studio:** drop videos, pick a model, reasoning effort and style, and say how you want it edited ("8-minute cut, hook with the best moment, B-roll on each tip").
+2. **Review:** play the edit, trim or rearrange on the timeline, check the *Cut* list, or ask for changes in the chat.
 3. **Export:** *Send to Resolve* to finish (grade, effects, deliver), or *Render MP4* directly. YouTube details and captions are ready to upload.
 
 **Tip:** tune a style's house rules over the first few videos until the first cut is nearly right, then batch the rest.
@@ -59,8 +63,9 @@ Your footage never leaves your computer. Your AI engine receives the transcript,
 ## Limits
 
 - Cuts happen between utterances (phrases separated by pauses). A sentence spoken in one breath can't be split in the middle; nudge the clip edges by hand if needed.
+- Free DaVinci Resolve can't be scripted from outside, so the final import is one menu click (*Workspace ▸ Scripts ▸ CutPilot Import*).
 - Resolve ignores most transitions and effects on FCPXML import, so CutPilot sends cuts, B-roll, titles, markers and chapters, and you do grading and effects in Resolve.
-- AI-generated B-roll isn't offered on purpose: medical/dental imagery from generators is often anatomically wrong.
+- AI-generated B-roll isn't offered on purpose: generated footage of people, products and real places is often wrong in ways that hurt credibility.
 - Windows only for now.
 
 ## Development

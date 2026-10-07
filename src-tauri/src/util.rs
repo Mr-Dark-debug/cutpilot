@@ -13,6 +13,19 @@ pub fn app_data_dir() -> PathBuf {
     base.join(APP_ID)
 }
 
+/// Paths saved by 1.0.0 point into the old data folder; map them to the new one.
+pub fn fix_legacy_path(path: &str) -> String {
+    if path.is_empty() || Path::new(path).exists() {
+        return path.to_string();
+    }
+    let Some(base) = dirs::data_local_dir() else { return path.to_string() };
+    let old = base.join(APP_DIR_NAME).to_string_lossy().to_string();
+    match path.strip_prefix(&old) {
+        Some(rest) => format!("{}{}", app_data_dir().to_string_lossy(), rest),
+        None => path.to_string(),
+    }
+}
+
 /// 1.0.0 kept its data next to the installed program; move it to the data folder once.
 pub fn migrate_legacy_data() {
     let Some(base) = dirs::data_local_dir() else { return };

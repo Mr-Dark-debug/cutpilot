@@ -1,33 +1,23 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import {
-  ArrowUp,
-  Clapperboard,
-  Film,
-  Link2,
-  Music2,
-  Plus,
-  RectangleVertical,
-  Smartphone,
-  Sparkles,
-  Stethoscope,
-  Video,
-  X,
-} from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { EngineChip, defaultEngine } from "../components/EnginePicker";
+import { ArrowUp, Film, Link2, Loader2, Music2, PanelRightClose, PanelRightOpen, Plus, RectangleVertical, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { defaultEngine } from "../components/EnginePicker";
+import { EffortPicker, ModelPicker } from "../components/ModelPicker";
 import { ProjectRow } from "../components/ProjectBits";
-import { Badge, Button, Card, Input, Modal, Segmented, Select, clsx } from "../components/ui";
+import { StylePicker } from "../components/StylePicker";
+import { Button, Card, Input, Modal, Segmented, clsx } from "../components/ui";
 import { api, errorText } from "../lib/api";
 import { AUDIO_EXT, VIDEO_EXT, fileName, isVideo } from "../lib/format";
-import { useStore } from "../lib/store";
+import { useStore, writeFlag } from "../lib/store";
 import type { EngineChoice } from "../lib/types";
 
-const QUICK = [
-  { style: "talking-head", title: "YouTube talking head", text: "Retakes out, tight cuts, B-roll", icon: Video, tint: "from-violet-500/15 to-violet-500/5 text-violet-500" },
-  { style: "medical-edu", title: "Doctor / dentist explainer", text: "Clear, accurate, safe visuals", icon: Stethoscope, tint: "from-sky-500/15 to-sky-500/5 text-sky-500" },
-  { style: "shorts", title: "Shorts / Reels", text: "Under 60 s, vertical, hook first", icon: Smartphone, tint: "from-pink-500/15 to-pink-500/5 text-pink-500" },
-  { style: "vlog", title: "Vlog", text: "Story kept, natural pacing", icon: Clapperboard, tint: "from-amber-500/15 to-amber-500/5 text-amber-500" },
-];
+function readRecentOpen() {
+  try {
+    return localStorage.getItem("cutpilot-recent-open") !== "0";
+  } catch {
+    return true;
+  }
+}
 
 export function Home() {
   const settings = useStore((s) => s.settings);
@@ -50,6 +40,7 @@ export function Home() {
   const [busy, setBusy] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
   const [refUrl, setRefUrl] = useState("");
+  const [recentOpen, setRecentOpen] = useState(readRecentOpen);
 
   useEffect(() => {
     if (!dropped.length) return;
@@ -61,7 +52,7 @@ export function Home() {
 
   useEffect(() => {
     const st = styles.find((s) => s.id === styleId);
-    if (st?.aspect === "9:16") setAspect("9:16");
+    setAspect(st?.aspect === "9:16" ? "9:16" : "16:9");
   }, [styleId, styles]);
 
   const pickVideos = async () => {
@@ -107,60 +98,27 @@ export function Home() {
     }
   };
 
-  const styleOptions = useMemo(() => styles.map((s) => ({ value: s.id, label: s.name, hint: s.description })), [styles]);
-  const recent = projects.slice(0, 8);
+  const toggleRecent = () => {
+    writeFlag("cutpilot-recent-open", !recentOpen);
+    setRecentOpen(!recentOpen);
+  };
+
+  const tool = "inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium whitespace-nowrap text-text-2 hover:bg-surface-3 hover:text-text";
 
   return (
     <div className="flex h-full">
-      <div className="dotted flex min-w-0 flex-1 flex-col overflow-auto">
-        <div className="mx-auto flex w-full max-w-[820px] flex-1 flex-col justify-center px-8 py-10">
-          <div className="mb-8 text-center">
-            <Badge tone="accent" className="mb-4">
-              <Sparkles className="size-3" /> Edits with your Claude or Codex subscription
-            </Badge>
-            <h1 className="text-[34px] leading-tight font-semibold tracking-tight">What are we editing today?</h1>
-            <p className="mx-auto mt-2.5 max-w-[520px] text-[14.5px] leading-relaxed text-muted">
-              Drop your raw footage, say how you want it. CutPilot cuts the retakes and dead air, plans B-roll, titles and chapters,
-              and hands a finished timeline to DaVinci Resolve.
-            </p>
-          </div>
+      <div className="dotted relative flex min-w-0 flex-1 flex-col overflow-auto">
+        <button
+          onClick={toggleRecent}
+          title={recentOpen ? "Hide recent projects" : "Show recent projects"}
+          className="absolute top-3 right-3 z-10 flex size-8 items-center justify-center rounded-lg text-muted hover:bg-surface-3 hover:text-text"
+        >
+          {recentOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+        </button>
+        <div className="mx-auto flex w-full max-w-[860px] flex-1 flex-col justify-center px-8 py-10">
+          <h1 className="mb-7 text-center text-[32px] leading-tight font-semibold tracking-tight">What are we editing today?</h1>
 
-          <div className="mb-6 grid grid-cols-2 gap-3">
-            {QUICK.map((q) => {
-              const active = styleId === q.style;
-              return (
-                <button
-                  key={q.style}
-                  onClick={() => {
-                    setStyleId(q.style);
-                    setAspect(q.style === "shorts" ? "9:16" : "16:9");
-                  }}
-                  className={clsx(
-                    "group flex items-center gap-3 rounded-2xl border bg-surface p-3 text-left shadow-card transition-all hover:-translate-y-px",
-                    active ? "border-accent ring-3 ring-accent/12" : "border-line hover:border-line-strong",
-                  )}
-                >
-                  <span className={clsx("flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br", q.tint)}>
-                    <q.icon className="size-5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13.5px] font-semibold">{q.title}</span>
-                    <span className="block truncate text-[12.5px] text-muted">{q.text}</span>
-                  </span>
-                  <span
-                    className={clsx(
-                      "flex size-6 items-center justify-center rounded-full border text-[11px]",
-                      active ? "border-accent bg-accent text-white" : "border-line text-muted",
-                    )}
-                  >
-                    {active ? "✓" : <Plus className="size-3" />}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <Card className="overflow-visible p-0 ring-1 ring-accent/10">
+          <Card className="overflow-visible p-0">
             {(files.length > 0 || refs.length > 0 || music) && (
               <div className="flex flex-wrap gap-1.5 border-b border-line p-3">
                 {files.map((f) => (
@@ -181,13 +139,13 @@ export function Home() {
               rows={3}
               placeholder={
                 files.length
-                  ? "How should it be edited? e.g. “Tight 8-minute cut, hook with the bleeding-gums question, B-roll on every tip, chapters.”"
+                  ? "How should it be edited? e.g. “Tight 10-minute cut, hook with the best moment, B-roll on every example, chapters.”"
                   : "Drop videos anywhere, or click Add videos. Then describe the edit you want…"
               }
               className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-[14px] leading-relaxed outline-none placeholder:text-faint"
             />
             <div className="flex items-center gap-0.5 px-2.5 pb-2.5">
-              <button onClick={pickVideos} className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] whitespace-nowrap font-medium text-text-2 hover:bg-surface-3 hover:text-text">
+              <button onClick={pickVideos} className={tool}>
                 <Plus className="size-3.5" /> Add videos
               </button>
               <button onClick={() => setRefOpen(true)} title="Add a reference video to match its style" className="inline-flex size-8 items-center justify-center rounded-lg text-text-2 hover:bg-surface-3 hover:text-text">
@@ -197,21 +155,22 @@ export function Home() {
                 <Music2 className="size-4" />
               </button>
               <span className="mx-1 h-4 w-px bg-line" />
-              <EngineChip value={engine} onChange={setEngine} />
-              <div className="w-[170px] shrink-0">
-                <Select compact value={styleId} onChange={setStyleId} options={styleOptions} icon={<Sparkles className="size-3.5" />} />
-              </div>
-              <button
-                onClick={() => setAspect(aspect === "16:9" ? "9:16" : "16:9")}
-                title="Output shape"
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] whitespace-nowrap font-medium text-text-2 hover:bg-surface-3 hover:text-text"
-              >
+              <ModelPicker value={engine} onChange={setEngine} />
+              <EffortPicker value={engine} onChange={setEngine} />
+              <StylePicker value={styleId} onChange={setStyleId} />
+              <button onClick={() => setAspect(aspect === "16:9" ? "9:16" : "16:9")} title="Output shape" className={tool}>
                 <RectangleVertical className={clsx("size-3.5 transition-transform", aspect === "16:9" && "rotate-90")} /> {aspect}
               </button>
               <div className="flex-1" />
-              <Button variant="primary" onClick={create} loading={busy} className="rounded-xl" icon={!busy && <ArrowUp className="size-4" />}>
-                {files.length > 1 && batch ? `Edit ${files.length} videos` : "Create edit"}
-              </Button>
+              <button
+                onClick={create}
+                disabled={busy}
+                title={files.length > 1 && batch ? `Edit ${files.length} videos (Ctrl+Enter)` : "Create edit (Ctrl+Enter)"}
+                className="ml-1 flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-text px-3 text-[13px] font-medium text-surface transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
+                {files.length > 1 && batch ? files.length : null}
+              </button>
             </div>
             {files.length > 1 && (
               <div className="flex items-center gap-3 border-t border-line px-4 py-2.5 text-[12.5px] text-muted">
@@ -228,32 +187,32 @@ export function Home() {
               </div>
             )}
           </Card>
-          <div className="mt-3 text-center text-[12px] text-faint">
-            Footage stays on your computer. Only the transcript and a few frame thumbnails go to your AI engine.
-          </div>
+          <div className="mt-3 text-center text-[12px] text-faint">Footage stays on your computer. Only the transcript and a few frame thumbnails go to your AI engine.</div>
         </div>
       </div>
 
-      <aside className="flex w-[300px] shrink-0 flex-col border-l border-line bg-sidebar">
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <div className="text-[13px] font-semibold">
-            Recent projects <span className="font-normal text-muted">({projects.length})</span>
-          </div>
-          <button onClick={() => navigate({ name: "projects" })} className="text-[12.5px] font-medium text-accent-text hover:underline">
-            View all
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 space-y-1.5 overflow-auto px-3 pb-3">
-          {recent.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-line p-5 text-center text-[12.5px] leading-relaxed text-muted">
-              Your edits will show up here. Start by dropping a video on the left.
+      {recentOpen && (
+        <aside className="flex w-[300px] shrink-0 flex-col border-l border-line bg-sidebar">
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <div className="text-[13px] font-semibold">
+              Recent projects <span className="font-normal text-muted">({projects.length})</span>
             </div>
-          )}
-          {recent.map((p) => (
-            <ProjectRow key={p.id} project={p} onClick={() => navigate({ name: "project", id: p.id })} />
-          ))}
-        </div>
-      </aside>
+            <button onClick={() => navigate({ name: "projects" })} className="mr-8 text-[12.5px] font-medium text-accent-text hover:underline">
+              View all
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-1.5 overflow-auto px-3 pb-3">
+            {projects.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-line p-5 text-center text-[12.5px] leading-relaxed text-muted">
+                Your edits will show up here. Start by dropping a video on the left.
+              </div>
+            )}
+            {projects.slice(0, 12).map((p) => (
+              <ProjectRow key={p.id} project={p} onClick={() => navigate({ name: "project", id: p.id })} />
+            ))}
+          </div>
+        </aside>
+      )}
 
       <Modal
         open={refOpen}
@@ -278,8 +237,8 @@ export function Home() {
         }
       >
         <p className="mb-3 text-[13px] leading-relaxed text-muted">
-          CutPilot studies a reference's pacing (cuts per minute, pauses, B-roll, on-screen text) and asks the AI to match its feel. Use a
-          downloaded file or paste a YouTube link (needs yt-dlp, installed from Settings ▸ Tools).
+          CutPilot studies a reference's pacing (cuts per minute, pauses, B-roll, on-screen text) and asks the AI to match its feel. Use a downloaded file or paste a
+          YouTube link.
         </p>
         <Input value={refUrl} onChange={(e) => setRefUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" autoFocus />
       </Modal>

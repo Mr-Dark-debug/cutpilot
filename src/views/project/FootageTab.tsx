@@ -1,16 +1,16 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { AlertCircle, CheckCircle2, Film, Link2, Loader2, Music2, Plus, RefreshCw, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Film, Link2, Loader2, Music2, Plus, RefreshCw, Trash2, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { EngineFields } from "../../components/EnginePicker";
+import { EffortPicker, ModelPicker } from "../../components/ModelPicker";
+import { StylePicker } from "../../components/StylePicker";
 import { Thumb } from "../../components/ProjectBits";
-import { Badge, Button, Card, Field, IconButton, Input, Modal, Segmented, Select, Textarea } from "../../components/ui";
+import { Badge, Button, Card, Field, IconButton, Input, Modal, Segmented, Textarea } from "../../components/ui";
 import { api, errorText } from "../../lib/api";
 import { AUDIO_EXT, VIDEO_EXT, fileName, fmtTime } from "../../lib/format";
 import { useProjectJob, useStore } from "../../lib/store";
 import type { Project } from "../../lib/types";
 
 export function FootageTab({ project }: { project: Project }) {
-  const styles = useStore((s) => s.styles);
   const toast = useStore((s) => s.toast);
   const refreshProject = useStore((s) => s.refreshProject);
   const job = useProjectJob(project.id);
@@ -156,12 +156,9 @@ export function FootageTab({ project }: { project: Project }) {
               <Textarea rows={5} value={brief} onChange={(e) => setBrief(e.target.value)} onBlur={() => brief !== project.brief && patch({ brief })} placeholder="What should the video be? Length, tone, hook…" />
             </Field>
             <Field label="Style">
-              <Select
-                value={project.styleId}
-                onChange={(styleId) => patch({ styleId })}
-                options={styles.map((s) => ({ value: s.id, label: s.name, hint: s.description }))}
-                icon={<Sparkles className="size-3.5" />}
-              />
+              <div className="rounded-xl border border-line px-1.5 py-1">
+                <StylePicker placement="bottom" value={project.styleId} onChange={(styleId) => patch({ styleId })} />
+              </div>
             </Field>
             <Field label="Output shape">
               <Segmented
@@ -175,7 +172,10 @@ export function FootageTab({ project }: { project: Project }) {
               />
             </Field>
             <Field label="AI editor">
-              <EngineFields value={project.engine} onChange={(engine) => patch({ engine })} />
+              <div className="flex items-center gap-1 rounded-xl border border-line px-1.5 py-1">
+                <ModelPicker placement="bottom" value={project.engine} onChange={(engine) => patch({ engine })} />
+                <EffortPicker placement="bottom" value={project.engine} onChange={(engine) => patch({ engine })} />
+              </div>
             </Field>
             <Field label="Background music" hint="Mixed under the voice and ducked automatically in renders.">
               <div className="flex gap-2">

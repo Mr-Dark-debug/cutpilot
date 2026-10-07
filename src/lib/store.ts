@@ -44,6 +44,8 @@ interface Store {
   search: string;
   /** Files dropped on the window, picked up by the Studio composer. */
   dropped: string[];
+  sidebarCollapsed: boolean;
+  spotlightOpen: boolean;
 
   init: () => Promise<void>;
   loadSettings: () => Promise<void>;
@@ -60,6 +62,26 @@ interface Store {
   setUpdate: (u: UpdateInfo | null) => void;
   setSearch: (s: string) => void;
   setDropped: (paths: string[]) => void;
+  toggleSidebar: () => void;
+  setSpotlight: (open: boolean) => void;
+  toggleFavoriteModel: (key: string) => void;
+}
+
+function readFlag(key: string, fallback: boolean) {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v === "1";
+  } catch {
+    return fallback;
+  }
+}
+
+export function writeFlag(key: string, v: boolean) {
+  try {
+    localStorage.setItem(key, v ? "1" : "0");
+  } catch {
+    /* storage unavailable */
+  }
 }
 
 let toastId = 1;
@@ -80,6 +102,8 @@ export const useStore = create<Store>((set, get) => ({
   update: null,
   search: "",
   dropped: [],
+  sidebarCollapsed: readFlag("cutpilot-sidebar-collapsed", false),
+  spotlightOpen: false,
 
   init: async () => {
     const [info] = await Promise.all([api.appInfo(), get().loadSettings(), get().loadProjects(), get().loadStyles(), get().loadJobs()]);
@@ -201,6 +225,18 @@ export const useStore = create<Store>((set, get) => ({
   setUpdate: (update) => set({ update }),
   setSearch: (search) => set({ search }),
   setDropped: (dropped) => set({ dropped }),
+  toggleSidebar: () =>
+    set((st) => {
+      writeFlag("cutpilot-sidebar-collapsed", !st.sidebarCollapsed);
+      return { sidebarCollapsed: !st.sidebarCollapsed };
+    }),
+  setSpotlight: (spotlightOpen) => set({ spotlightOpen }),
+  toggleFavoriteModel: (key) => {
+    const s = get().settings;
+    if (!s) return;
+    const favs = s.favoriteModels ?? [];
+    get().saveSettings({ ...s, favoriteModels: favs.includes(key) ? favs.filter((f) => f !== key) : [...favs, key] });
+  },
 }));
 
 export function applyTheme(theme: string) {

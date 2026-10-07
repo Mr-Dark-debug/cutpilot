@@ -2,20 +2,13 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Copy, Film, Link2, Loader2, Palette, Plus, RotateCcw, Save, Star, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Thumb } from "../components/ProjectBits";
+import { StyleIcon } from "../components/StylePicker";
 import { Badge, Button, Card, Field, IconButton, Input, Modal, Segmented, Switch, Textarea, clsx } from "../components/ui";
 import { api, errorText } from "../lib/api";
 import { VIDEO_EXT } from "../lib/format";
 import { useStore } from "../lib/store";
 import type { Style } from "../lib/types";
 
-const DOT: Record<string, string> = {
-  violet: "bg-violet-500",
-  blue: "bg-sky-500",
-  amber: "bg-amber-500",
-  pink: "bg-pink-500",
-  green: "bg-emerald-500",
-  slate: "bg-slate-500",
-};
 
 export function Styles({ initialId }: { initialId?: string }) {
   const styles = useStore((s) => s.styles);
@@ -94,11 +87,11 @@ export function Styles({ initialId }: { initialId?: string }) {
               key={s.id}
               onClick={() => setSelId(s.id)}
               className={clsx(
-                "flex w-full items-start gap-2.5 rounded-xl px-3 py-2.5 text-left transition-colors",
+                "flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors",
                 s.id === sel?.id ? "bg-surface shadow-card ring-1 ring-line" : "hover:bg-surface-3",
               )}
             >
-              <span className={clsx("mt-1.5 size-2 shrink-0 rounded-full", DOT[s.color] ?? "bg-violet-500")} />
+              <StyleIcon style={s} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5 text-[13px] font-semibold">
                   <span className="truncate">{s.name}</span>

@@ -195,7 +195,7 @@ fn main() -> Result<()> {
                 let id = args.get(1).cloned().unwrap_or_default();
                 let request = args.get(2).cloned().unwrap_or_default();
                 project::update(&id, |p| {
-                    p.chat.push(project::ChatMessage { role: "user".into(), text: request.clone(), created: cutpilot_lib::util::now_iso(), version: None });
+                    p.chat.push(project::ChatMessage { role: "user".into(), text: request.clone(), created: cutpilot_lib::util::now_iso(), version: None, ..Default::default() });
                     Ok(())
                 })?;
                 let pid = id.clone();

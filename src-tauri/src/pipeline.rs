@@ -380,7 +380,14 @@ pub fn edit_path(p: &Project, version: u32) -> PathBuf {
 
 pub fn load_edit(p: &Project, version: Option<u32>) -> Result<Edit> {
     let v = version.or(p.current_edit).ok_or_else(|| anyhow!("this project has no edit yet"))?;
-    util::read_json(&edit_path(p, v))
+    let mut e: Edit = util::read_json(&edit_path(p, v))?;
+    for b in e.broll.iter_mut() {
+        if let Some(a) = b.asset.as_mut() {
+            a.path = util::fix_legacy_path(&a.path);
+            a.thumb = util::fix_legacy_path(&a.thumb);
+        }
+    }
+    Ok(e)
 }
 
 pub fn compute_timeline(p: &Project, e: &Edit) -> Timeline {
@@ -456,9 +463,12 @@ pub async fn plan_edit(ctx: &Ctx, project_id: &str, request: Option<String>, bas
     std::fs::create_dir_all(&agent_dir)?;
     std::fs::write(agent_dir.join("last-prompt.md"), &prompt)?;
     let ids: HashSet<String> = utts.iter().map(|u| u.id.clone()).collect();
+    let steps: std::sync::Arc<std::sync::Mutex<Vec<String>>> = Default::default();
+    let started = std::time::Instant::now();
     let plan: Plan = {
         let _slot = ctx.llm_slot().await?;
         let ctx2 = ctx.clone();
+        let steps2 = steps.clone();
         let req = agent::Request {
             prompt,
             schema: edit::plan_schema(),
@@ -468,7 +478,11 @@ pub async fn plan_edit(ctx: &Ctx, project_id: &str, request: Option<String>, bas
             timeout: Duration::from_secs(40 * 60),
         };
         let ids = ids.clone();
-        agent::run_validated(&engine, req, &ctx.cancel, &move |m| ctx2.log(m), move |v| {
+        let on_event = move |m: &str| {
+            ctx2.log(m);
+            steps2.lock().unwrap().push(m.to_string());
+        };
+        agent::run_validated(&engine, req, &ctx.cancel, &on_event, move |v| {
             let plan: Plan = serde_json::from_value(v).context("plan didn't match the schema")?;
             let listed: Vec<&String> = plan.segments.iter().flat_map(|s| s.ids.iter()).collect();
             if listed.is_empty() {
@@ -522,9 +536,17 @@ pub async fn plan_edit(ctx: &Ctx, project_id: &str, request: Option<String>, bas
     let note = request.clone().map(|r| util::clip_text(&r, 80)).unwrap_or_else(|| "First cut".into());
     let engine_label = engine.label();
     project::update(project_id, |p| {
-        p.edits.push(EditMeta { version, created: util::now_iso(), kind: e.kind.clone(), note, engine: engine_label, duration: tl.duration });
+        p.edits.push(EditMeta { version, created: util::now_iso(), kind: e.kind.clone(), note, engine: engine_label.clone(), duration: tl.duration });
         p.current_edit = Some(version);
-        p.chat.push(ChatMessage { role: "assistant".into(), text: summary, created: util::now_iso(), version: Some(version) });
+        p.chat.push(ChatMessage {
+            role: "assistant".into(),
+            text: summary,
+            created: util::now_iso(),
+            version: Some(version),
+            steps: steps.lock().unwrap().clone(),
+            seconds: started.elapsed().as_secs_f64(),
+            engine: engine_label.clone(),
+        });
         Ok(())
     })?;
     ctx.project_changed(project_id);

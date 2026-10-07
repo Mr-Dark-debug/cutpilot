@@ -2,7 +2,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { Bot, Captions, Download, ExternalLink, Eye, EyeOff, FolderOpen, Info, Layers, RefreshCw, Sparkles, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
-import { EngineFields } from "../components/EnginePicker";
+import { DaVinciLogo } from "../components/BrandIcons";
+import { EffortPicker, ModelPicker } from "../components/ModelPicker";
 import { LogoMark } from "../components/Logo";
 import { ToolRow, installTool, useInstallJob } from "../components/ToolRow";
 import { Badge, Button, Card, Input, Select, Switch, clsx } from "../components/ui";
@@ -127,17 +128,27 @@ function Engines({ settings, set }: { settings: S; set: (p: Partial<S>) => void 
       </Card>
       <Card className="p-5">
         <div className="mb-3 text-[13.5px] font-semibold">Default for new projects</div>
-        <EngineFields
-          value={value}
-          onChange={(v) =>
-            set({
-              engine:
-                v.provider === "codex"
-                  ? { ...e, provider: "codex", codexModel: v.model, codexEffort: v.effort }
-                  : { ...e, provider: "claude", claudeModel: v.model, claudeEffort: v.effort },
-            })
-          }
-        />
+        <div className="flex items-center gap-1 rounded-xl border border-line px-1.5 py-1">
+          <ModelPicker
+            placement="bottom"
+            value={value}
+            onChange={(v) =>
+              set({
+                engine:
+                  v.provider === "codex"
+                    ? { ...e, provider: "codex", codexModel: v.model, codexEffort: v.effort }
+                    : { ...e, provider: "claude", claudeModel: v.model, claudeEffort: v.effort },
+              })
+            }
+          />
+          <EffortPicker
+            placement="bottom"
+            value={value}
+            onChange={(v) =>
+              set({ engine: v.provider === "codex" ? { ...e, codexEffort: v.effort } : { ...e, claudeEffort: v.effort } })
+            }
+          />
+        </div>
         <p className="mt-3 text-[12px] leading-relaxed text-muted">
           Medium effort is plenty for most edits. Higher effort thinks longer on tricky footage (many retakes, interviews) and uses more of your
           plan.
@@ -180,11 +191,73 @@ function Tools() {
             </Button>
           </div>
         </div>
-        {list.map((t) => (
-          <ToolRow key={t.id} tool={t} />
-        ))}
+        {list
+          .filter((t) => t.id !== "resolve")
+          .map((t) => (
+            <ToolRow key={t.id} tool={t} />
+          ))}
       </Card>
+      <ResolveCard />
     </>
+  );
+}
+
+function ResolveCard() {
+  const tools = useStore((s) => s.tools);
+  const settings = useStore((s) => s.settings);
+  const save = useStore((s) => s.saveSettings);
+  const loadTools = useStore((s) => s.loadTools);
+  const rv = tools.find((t) => t.id === "resolve");
+  if (!settings) return null;
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex items-center gap-3">
+        <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-zinc-700 to-zinc-900 text-white">
+          <DaVinciLogo size={22} />
+        </span>
+        <div className="flex-1">
+          <div className="text-[14px] font-semibold">DaVinci Resolve {rv?.version && <span className="font-normal text-muted">{rv.version}</span>}</div>
+          <div className="text-[12.5px] text-muted">{rv?.installed ? "Found – Send to Resolve opens it and installs the CutPilot Import script" : "Not found yet"}</div>
+        </div>
+        {rv?.installed && (
+          <Button size="sm" onClick={() => rv.path && openPath(rv.path)}>
+            Open Resolve
+          </Button>
+        )}
+      </div>
+      <Row title="Resolve.exe" hint={rv?.path || "Detected from the default folder or your Start-menu shortcut"}>
+        <div className="flex gap-2">
+          {settings.resolvePath && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => {
+                await save({ ...settings, resolvePath: "" });
+                loadTools();
+              }}
+            >
+              Auto-detect
+            </Button>
+          )}
+          <Button
+            size="sm"
+            onClick={async () => {
+              const f = await open({ multiple: false, filters: [{ name: "Resolve", extensions: ["exe"] }] });
+              if (typeof f === "string") {
+                await save({ ...settings, resolvePath: f });
+                loadTools();
+              }
+            }}
+          >
+            Choose…
+          </Button>
+        </div>
+      </Row>
+      <div className="mt-3 rounded-xl bg-surface-2 p-3 text-[12px] leading-relaxed text-muted">
+        Free Resolve can't be controlled from outside, so after <b>Send to Resolve</b> run <b>Workspace ▸ Scripts ▸ CutPilot Import</b> once inside Resolve. It
+        creates a project with the right frame rate, imports your footage, B-roll, timeline and captions.
+      </div>
+    </Card>
   );
 }
 

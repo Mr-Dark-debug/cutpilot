@@ -304,7 +304,7 @@ pub fn revise_edit(state: State<AppState>, id: String, request: String) -> R<Str
         if p.current_edit.is_none() {
             anyhow::bail!("create the first edit before asking for changes");
         }
-        p.chat.push(project::ChatMessage { role: "user".into(), text: request.clone(), created: util::now_iso(), version: None });
+        p.chat.push(project::ChatMessage { role: "user".into(), text: request.clone(), created: util::now_iso(), version: None, ..Default::default() });
         Ok(())
     })
     .map_err(e)?;

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.0
+
+A redesign of the workspace and a real editing timeline.
+
+- **Timeline editor:** titles, B-roll, video and audio-waveform tracks with timecode ruler, chapter flags, zoom (Ctrl+wheel / slider / fit), snapping, ripple trim by dragging clip edges, drag clips to reorder, move and resize B-roll and titles, split at playhead (S), delete (Del) and undo/redo (Ctrl+Z / Ctrl+Y).
+- **Resizable workspace:** player, timeline and details panels resize vertically; the AI chat resizes and collapses. Layouts are remembered.
+- **AI chat:** choose the model and reasoning effort right in the chat, see what the AI is doing live (thinking, looking at frames, writing decisions), and "Thought for Xs" with the steps on every reply. Versions moved into the ⋯ menu, with "Switch to this version" on each reply.
+- **New model picker** with Claude and OpenAI logos, favourites, search and Ctrl+1–9 shortcuts, plus a reasoning-effort picker.
+- **15 detailed editing styles** for common video types (talking head, vlog, travel, tutorial, explainer, podcast, Shorts/Reels, review, gaming, cooking, fitness, course, documentary, reaction, promo), with a searchable, grouped style picker.
+- **Spotlight search (Ctrl+K)** across projects, styles, B-roll clips, settings and actions.
+- **Sidebar:** collapses to an icon rail (Ctrl+B); projects are listed under Projects like chats; AI engine status moved to Settings with proper logos.
+- **DaVinci Resolve** is now found wherever it's installed (Start-menu shortcut or a path you choose) and shows its version; new Resolve card in Settings ▸ Tools.
+- Cleaner Studio screen; no coloured focus rings on inputs.
+- Fixed: B-roll thumbnails from projects made before 1.0.1 didn't show.
+
 ## 1.0.2
 
 - If the chosen AI engine is signed out, missing or out of usage, the edit continues with the other signed-in engine, and new projects default to an engine that is ready.

@@ -1,4 +1,5 @@
-import { CheckCircle2, CircleAlert, Download, LogIn, Loader2, Terminal } from "lucide-react";
+import { AudioLines, Brain, Cpu, Download, Film, Link2, LogIn, Loader2, Wrench } from "lucide-react";
+import { ClaudeLogo, DaVinciLogo, OpenAILogo } from "./BrandIcons";
 import { api, errorText } from "../lib/api";
 import { useStore } from "../lib/store";
 import type { ToolStatus } from "../lib/types";
@@ -21,14 +22,44 @@ export async function installTool(id: string) {
   }
 }
 
+export function toolIcon(id: string) {
+  switch (id) {
+    case "claude":
+      return <ClaudeLogo size={18} />;
+    case "codex":
+      return <OpenAILogo size={18} />;
+    case "resolve":
+      return <DaVinciLogo size={18} />;
+    case "ffmpeg":
+      return <Film className="size-4" />;
+    case "whisper":
+      return <AudioLines className="size-4" />;
+    case "whisper-gpu":
+      return <Cpu className="size-4" />;
+    case "model":
+      return <Brain className="size-4" />;
+    case "ytdlp":
+      return <Link2 className="size-4" />;
+    default:
+      return <Wrench className="size-4" />;
+  }
+}
+
 export function ToolRow({ tool, compact }: { tool: ToolStatus; compact?: boolean }) {
   const realJob = useInstallJob(tool.id);
   const engine = tool.id === "claude" || tool.id === "codex";
   const ok = tool.installed && (!engine || tool.loggedIn);
   return (
     <div className={clsx("flex items-center gap-3 border-b border-line last:border-b-0", compact ? "px-3.5 py-2.5" : "px-4 py-3")}>
-      <span className={clsx("flex size-8 shrink-0 items-center justify-center rounded-xl", ok ? "bg-ok-soft text-ok" : tool.required || engine ? "bg-warn-soft text-warn" : "bg-surface-3 text-muted")}>
-        {ok ? <CheckCircle2 className="size-4" /> : engine ? <Terminal className="size-4" /> : <CircleAlert className="size-4" />}
+      <span className="relative flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-text-2 ring-1 ring-line">
+        {toolIcon(tool.id)}
+        <span
+          title={ok ? "Ready" : tool.installed ? "Needs attention" : "Not installed"}
+          className={clsx(
+            "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-surface",
+            ok ? "bg-ok" : tool.installed || tool.required || engine ? "bg-warn" : "bg-line-strong",
+          )}
+        />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

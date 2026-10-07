@@ -108,7 +108,7 @@ export function Input({ className, ...rest }: React.InputHTMLAttributes<HTMLInpu
     <input
       {...rest}
       className={clsx(
-        "h-9 w-full rounded-xl border border-line bg-surface px-3 text-[13.5px] text-text placeholder:text-faint outline-none transition-colors focus:border-accent focus:ring-3 focus:ring-accent/15",
+        "h-9 w-full rounded-xl border border-line bg-surface px-3 text-[13.5px] text-text placeholder:text-faint outline-none transition-colors focus:border-line-strong",
         className,
       )}
     />
@@ -120,7 +120,7 @@ export function Textarea({ className, ...rest }: React.TextareaHTMLAttributes<HT
     <textarea
       {...rest}
       className={clsx(
-        "w-full resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-[13.5px] leading-relaxed text-text placeholder:text-faint outline-none transition-colors focus:border-accent focus:ring-3 focus:ring-accent/15",
+        "w-full resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-[13.5px] leading-relaxed text-text placeholder:text-faint outline-none transition-colors focus:border-line-strong",
         className,
       )}
     />
@@ -172,7 +172,7 @@ export function Select({
         className={clsx(
           "flex w-full items-center gap-2 rounded-xl border border-line bg-surface text-left text-[13.5px] text-text transition-colors hover:border-line-strong",
           compact ? "h-8 px-2.5 text-[13px]" : "h-9 px-3",
-          open && "border-accent ring-3 ring-accent/15",
+          open && "border-line-strong",
         )}
       >
         {icon && <span className="text-muted">{icon}</span>}

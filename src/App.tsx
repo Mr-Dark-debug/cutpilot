@@ -3,6 +3,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { AlertCircle, CheckCircle2, Info, Upload, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
+import { Spotlight } from "./components/Spotlight";
 import { clsx } from "./components/ui";
 import { isTauri } from "./lib/api";
 import { useStore } from "./lib/store";
@@ -61,13 +62,12 @@ export default function App() {
     }
   }, [ready]);
 
-  // "/" focuses project search.
+  // Ctrl+B collapses the sidebar (Ctrl+K for Spotlight lives in <Spotlight>).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement;
-      if (e.key === "/" && el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
         e.preventDefault();
-        (document.querySelector('input[placeholder="Search projects"]') as HTMLInputElement | null)?.focus();
+        useStore.getState().toggleSidebar();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -107,6 +107,7 @@ export default function App() {
           </div>
         </div>
       )}
+      <Spotlight />
       <Toasts />
     </div>
   );

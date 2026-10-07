@@ -86,7 +86,7 @@ ffmpeg, whisper.cpp + model and yt-dlp are detected on PATH or downloaded into
 
 ## Not in scope (by decision)
 
-- AI-generated B-roll: medical/dental imagery is often anatomically wrong; stock
-  + own footage is safer for credibility.
+- AI-generated B-roll: generated people, products and places are often wrong;
+  stock + own footage is safer for credibility.
 - Colour grading, effects and transitions beyond cross-dissolves: Resolve ignores
   most of them on FCPXML import, so they stay manual.

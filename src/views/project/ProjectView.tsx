@@ -1,6 +1,7 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { AlertCircle, ArrowLeft, Check, Clapperboard, FolderOpen, Loader2, RotateCw, Send, Sparkles, Wand2, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, Clapperboard, FolderOpen, Loader2, PanelRightOpen, RotateCw, Send, Sparkles, Wand2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Group, Panel, Separator, useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import { JobLog } from "../../components/JobLog";
 import { StatusPill } from "../../components/ProjectBits";
 import { Button, Card, IconButton, Progress, Segmented, clsx } from "../../components/ui";
@@ -13,12 +14,25 @@ import { FootageTab } from "./FootageTab";
 import { NotesPanel } from "./NotesPanel";
 import { Player, type PlayerHandle } from "./Player";
 import { StoryPanel } from "./StoryPanel";
-import { TimelineStrip } from "./TimelineStrip";
+import { TimelineEditor, type Selection } from "./TimelineEditor";
 import { TitlesPanel } from "./TitlesPanel";
 import { useEditor } from "./useEditor";
 
 type Tab = "edit" | "footage" | "export" | "activity";
 type Lower = "story" | "broll" | "titles" | "notes";
+
+function Handle({ vertical }: { vertical?: boolean }) {
+  return (
+    <Separator className={clsx("group relative flex shrink-0 items-center justify-center bg-transparent", vertical ? "h-2.5 cursor-row-resize" : "w-2 cursor-col-resize")}>
+      <span
+        className={clsx(
+          "rounded-full bg-line-strong transition-colors group-hover:bg-text/40 group-data-[separator=active]:bg-text/60",
+          vertical ? "h-1 w-10" : "h-10 w-1",
+        )}
+      />
+    </Separator>
+  );
+}
 
 export function ProjectView({ id, initialTab }: { id: string; initialTab?: string }) {
   const project = useStore((s) => s.projects.find((p) => p.id === id));
@@ -30,10 +44,14 @@ export function ProjectView({ id, initialTab }: { id: string; initialTab?: strin
   const [tab, setTab] = useState<Tab>((initialTab as Tab) || "edit");
   const [lower, setLower] = useState<Lower>("story");
   const [time, setTime] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Selection>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [renaming, setRenaming] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
   const player = useRef<PlayerHandle>(null);
+  const chatRef = usePanelRef();
+  const outer = useDefaultLayout({ id: "cp-project-h", storage: localStorage });
+  const inner = useDefaultLayout({ id: "cp-editor-v", storage: localStorage });
 
   // Reload the edit whenever a job for this project finishes.
   const finishedKey = Object.values(jobs)
@@ -51,7 +69,7 @@ export function ProjectView({ id, initialTab }: { id: string; initialTab?: strin
     refreshProject(id);
   }, [id, refreshProject]);
 
-  const { bundle, setBundle, error, saving, update, sources } = useEditor(project, reloadToken);
+  const { bundle, setBundle, error, saving, update, sources, undo, redo, canUndo, canRedo } = useEditor(project, reloadToken);
   const onSeek = useCallback((t: number) => player.current?.seek(t), []);
 
   useEffect(() => {
@@ -68,13 +86,15 @@ export function ProjectView({ id, initialTab }: { id: string; initialTab?: strin
     return () => window.removeEventListener("keydown", onKey);
   }, [tab, time]);
 
-  const lastError = useMemo(
+  const lastJob = useMemo(
     () =>
       Object.values(jobs)
         .filter((j) => j.projectId === id)
         .sort((a, b) => b.created.localeCompare(a.created))[0],
     [jobs, id],
   );
+
+  const sourceDurations = useMemo(() => Object.fromEntries((project?.sources ?? []).map((s) => [s.id, s.info?.duration ?? Infinity])), [project?.sources]);
 
   if (!project)
     return (
@@ -94,10 +114,18 @@ export function ProjectView({ id, initialTab }: { id: string; initialTab?: strin
 
   const hasEdit = !!project.currentEdit && !!bundle;
   const multiSource = project.sources.length > 1;
+  const selId = selected?.id ?? null;
+
+  const toggleChat = () => {
+    const p = chatRef.current;
+    if (!p) return;
+    if (p.isCollapsed()) p.expand();
+    else p.collapse();
+  };
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-[58px] shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
+      <header className="flex h-[56px] shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
         <IconButton label="Back to projects" onClick={() => navigate({ name: "projects" })}>
           <ArrowLeft className="size-4" />
         </IconButton>
@@ -105,7 +133,7 @@ export function ProjectView({ id, initialTab }: { id: string; initialTab?: strin
           <input
             autoFocus
             defaultValue={project.name}
-            className="h-8 rounded-lg border border-accent bg-surface px-2 text-[15px] font-semibold outline-none"
+            className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-[15px] font-semibold outline-none"
             onBlur={async (e) => {
               setRenaming(false);
               const name = e.target.value.trim();
@@ -117,7 +145,7 @@ export function ProjectView({ id, initialTab }: { id: string; initialTab?: strin
             onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
           />
         ) : (
-          <button onDoubleClick={() => setRenaming(true)} title="Double-click to rename" className="max-w-[340px] truncate text-[15px] font-semibold">
+          <button onDoubleClick={() => setRenaming(true)} title="Double-click to rename" className="max-w-[320px] truncate text-[15px] font-semibold">
             {project.name}
           </button>
         )}
@@ -144,6 +172,11 @@ export function ProjectView({ id, initialTab }: { id: string; initialTab?: strin
         <IconButton label="Open project folder" onClick={() => revealItemInDir(project.dir + "\\project.json")}>
           <FolderOpen className="size-4" />
         </IconButton>
+        {tab === "edit" && hasEdit && chatCollapsed && (
+          <IconButton label="Show AI chat" onClick={toggleChat}>
+            <PanelRightOpen className="size-4" />
+          </IconButton>
+        )}
         {hasEdit && (
           <Button size="sm" variant="primary" icon={<Send className="size-3.5" />} onClick={() => setTab("export")}>
             Export
@@ -151,18 +184,18 @@ export function ProjectView({ id, initialTab }: { id: string; initialTab?: strin
         )}
       </header>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className={clsx("min-h-0 flex-1", tab === "edit" && hasEdit ? "overflow-hidden" : "overflow-auto")}>
         {tab === "footage" && <FootageTab project={project} />}
         {tab === "export" && <ExportTab project={project} />}
         {tab === "activity" && (
           <div className="mx-auto max-w-[980px] p-6">
-            {lastError ? (
+            {lastJob ? (
               <Card className="overflow-hidden">
                 <div className="flex items-center gap-2 border-b border-line px-4 py-3 text-[13px] font-semibold">
-                  {lastError.title}
-                  <span className="text-[12px] font-normal text-muted">· {lastError.state}</span>
+                  {lastJob.title}
+                  <span className="text-[12px] font-normal text-muted">· {lastJob.state}</span>
                 </div>
-                <JobLog jobId={lastError.id} className="h-[60vh]" />
+                <JobLog jobId={lastJob.id} className="h-[60vh]" />
               </Card>
             ) : (
               <div className="p-10 text-center text-[13px] text-muted">No activity in this session yet. Logs of past runs are in the project's logs folder.</div>
@@ -172,80 +205,109 @@ export function ProjectView({ id, initialTab }: { id: string; initialTab?: strin
 
         {tab === "edit" &&
           (hasEdit ? (
-            <div className="flex h-full min-h-[640px]">
-              <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-auto p-4">
-                <div className="h-[46vh] min-h-[300px] shrink-0">
-                  <Player ref={player} project={project} timeline={bundle.timeline} onTime={setTime} />
-                </div>
-                <TimelineStrip
-                  timeline={bundle.timeline}
-                  edit={bundle.edit}
-                  time={time}
-                  onSeek={onSeek}
-                  selected={selected}
-                  onSelect={(kind, sid) => {
-                    setSelected(sid);
-                    setLower(kind === "clip" ? "story" : kind === "broll" ? "broll" : "titles");
-                  }}
-                />
-                {job && (
-                  <div className="flex items-center gap-3 rounded-xl border border-accent/30 bg-accent-soft/50 px-3 py-2 text-[12.5px]">
-                    <Loader2 className="size-3.5 animate-spin text-accent" />
-                    <span className="truncate">{job.message || job.stage}</span>
-                    <Progress value={job.progress} className="w-40" />
-                  </div>
-                )}
-                <div>
-                  <div className="mb-3 flex items-center gap-1 border-b border-line">
-                    {(
-                      [
-                        ["story", `Story · ${bundle.edit.segments.length} sections`],
-                        ["broll", `B-roll · ${bundle.edit.broll.length}`],
-                        ["titles", `Titles · ${bundle.edit.titles.length}`],
-                        ["notes", "Notes & YouTube"],
-                      ] as const
-                    ).map(([k, label]) => (
-                      <button
-                        key={k}
-                        onClick={() => setLower(k)}
-                        className={clsx(
-                          "-mb-px border-b-2 px-3 pb-2 text-[13px] font-medium transition-colors",
-                          lower === k ? "border-accent text-text" : "border-transparent text-muted hover:text-text",
-                        )}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  {lower === "story" && (
-                    <StoryPanel
+            <Group orientation="horizontal" className="h-full" defaultLayout={outer.defaultLayout} onLayoutChanged={outer.onLayoutChanged}>
+              <Panel id="editor" minSize="45">
+                <Group orientation="vertical" className="h-full px-3 pt-3 pb-1" defaultLayout={inner.defaultLayout} onLayoutChanged={inner.onLayoutChanged}>
+                  <Panel id="player" defaultSize="40" minSize="18">
+                    <Player ref={player} project={project} timeline={bundle.timeline} onTime={setTime} />
+                  </Panel>
+                  <Handle vertical />
+                  <Panel id="timeline" defaultSize="34" minSize={170}>
+                    <TimelineEditor
                       edit={bundle.edit}
                       timeline={bundle.timeline}
                       sources={sources}
+                      sourceDurations={sourceDurations}
                       time={time}
-                      update={update}
                       onSeek={onSeek}
+                      update={update}
+                      undo={undo}
+                      redo={redo}
+                      canUndo={canUndo}
+                      canRedo={canRedo}
                       selected={selected}
-                      multiSource={multiSource}
+                      onSelect={(s) => {
+                        setSelected(s);
+                        if (s) setLower(s.kind === "clip" ? "story" : s.kind === "broll" ? "broll" : "titles");
+                      }}
                     />
-                  )}
-                  {lower === "broll" && (
-                    <BrollPanel project={project} edit={bundle.edit} timeline={bundle.timeline} update={update} onSeek={onSeek} setBundle={setBundle} selected={selected} />
-                  )}
-                  {lower === "titles" && <TitlesPanel edit={bundle.edit} timeline={bundle.timeline} time={time} update={update} onSeek={onSeek} selected={selected} />}
-                  {lower === "notes" && <NotesPanel edit={bundle.edit} timeline={bundle.timeline} />}
+                  </Panel>
+                  <Handle vertical />
+                  <Panel id="details" defaultSize="28" minSize="10">
+                    <div className="flex h-full flex-col">
+                      {job && (
+                        <div className="mb-2 flex shrink-0 items-center gap-3 rounded-xl border border-line bg-surface-2 px-3 py-2 text-[12.5px]">
+                          <Loader2 className="size-3.5 animate-spin text-accent" />
+                          <span className="truncate">{job.message || job.stage}</span>
+                          <Progress value={job.progress} className="w-40" />
+                        </div>
+                      )}
+                      <div className="flex shrink-0 items-center gap-1 border-b border-line">
+                        {(
+                          [
+                            ["story", `Story · ${bundle.edit.segments.length} sections`],
+                            ["broll", `B-roll · ${bundle.edit.broll.length}`],
+                            ["titles", `Titles · ${bundle.edit.titles.length}`],
+                            ["notes", "Notes & YouTube"],
+                          ] as const
+                        ).map(([k, label]) => (
+                          <button
+                            key={k}
+                            onClick={() => setLower(k)}
+                            className={clsx(
+                              "-mb-px border-b-2 px-3 pb-2 text-[13px] font-medium transition-colors",
+                              lower === k ? "border-text text-text" : "border-transparent text-muted hover:text-text",
+                            )}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="min-h-0 flex-1 overflow-auto py-3 pr-1">
+                        {lower === "story" && (
+                          <StoryPanel
+                            edit={bundle.edit}
+                            timeline={bundle.timeline}
+                            sources={sources}
+                            time={time}
+                            update={update}
+                            onSeek={onSeek}
+                            selected={selId}
+                            multiSource={multiSource}
+                          />
+                        )}
+                        {lower === "broll" && (
+                          <BrollPanel project={project} edit={bundle.edit} timeline={bundle.timeline} update={update} onSeek={onSeek} setBundle={setBundle} selected={selId} />
+                        )}
+                        {lower === "titles" && <TitlesPanel edit={bundle.edit} timeline={bundle.timeline} time={time} update={update} onSeek={onSeek} selected={selId} />}
+                        {lower === "notes" && <NotesPanel edit={bundle.edit} timeline={bundle.timeline} />}
+                      </div>
+                    </div>
+                  </Panel>
+                </Group>
+              </Panel>
+              <Handle />
+              <Panel
+                id="chat"
+                panelRef={chatRef}
+                defaultSize={360}
+                minSize={290}
+                maxSize="50"
+                collapsible
+                collapsedSize={0}
+                onResize={(size) => setChatCollapsed(size.asPercentage < 1)}
+              >
+                <div className="h-full border-l border-line">
+                  <ChatPanel project={project} versions={bundle.versions} onCollapse={toggleChat} />
                 </div>
-              </div>
-              <aside className="w-[340px] shrink-0 border-l border-line bg-sidebar">
-                <ChatPanel project={project} versions={bundle.versions} />
-              </aside>
-            </div>
+              </Panel>
+            </Group>
           ) : project.currentEdit && !error && !job ? (
             <div className="flex h-full items-center justify-center text-[13px] text-muted">
               <Loader2 className="mr-2 size-4 animate-spin" /> Loading the edit…
             </div>
           ) : (
-            <Progressing project={project} start={start} error={error} lastJobId={lastError?.id} />
+            <Progressing project={project} start={start} error={error} lastJobId={lastJob?.id} />
           ))}
       </div>
     </div>

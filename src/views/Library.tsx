@@ -51,7 +51,7 @@ export function Library() {
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight">B-roll library</h1>
             <p className="mt-1 max-w-[620px] text-[13.5px] text-muted">
-              Your own cut-aways: clinic shots, product close-ups, location clips. The AI sees short descriptions and picks from here before
+              Your own cut-aways: locations, product close-ups, screen recordings, recurring shots. The AI sees short descriptions and picks from here before
               going to stock.
             </p>
           </div>
